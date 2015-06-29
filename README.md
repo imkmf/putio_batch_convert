@@ -17,7 +17,7 @@ If you're from put.io and this *isn't* okay, [contact me (mailto link)](mailto:k
 
 ---
 
-Config: API key in `.secrets`:
+Config: API key in `.env`:
 
 ```
 API_KEY=12345678
