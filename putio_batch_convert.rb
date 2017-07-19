@@ -4,6 +4,7 @@ Dotenv.load
 require 'httparty'
 require 'json'
 require 'ostruct'
+require 'pp'
 
 module PutIO
   class Folder < OpenStruct
@@ -25,18 +26,17 @@ module PutIO
     end
 
     def get(url)
-      puts "GET: #{url}"
+      # puts "GET: #{url}"
       self.class.get(url, @options)
     end
 
     def post(url)
-      puts "POST: #{url}"
+      # puts "POST: #{url}"
       self.class.post(url, @options)
     end
 
-    def files(id = nil)
-      id_url = "/#{id}" if id
-      get("/files/list#{id_url}")
+    def files(parent_id = 0)
+      get("/files/list?parent_id=#{parent_id}")
     end
 
     def file_conversion_status(id)
@@ -67,7 +67,7 @@ module PutIO
     def traverse(folder_id)
       resp = client.files(folder_id)
       resp["files"].each do |item|
-        if item["content_type"] == "application/x-directory"
+        if item["file_type"] == "FOLDER"
           folders << PutIO::Folder.new(item)
         else
           files << PutIO::File.new(item)
@@ -75,13 +75,29 @@ module PutIO
       end
 
       files.each do |file|
-        next if file.is_mp4_available
+        if file.is_mp4_available
+          puts "SKIPPING::AVAILABLE\t#{file.name}"
+          next
+        end
+
+        if !file.content_type.start_with?("video/")
+          puts "SKIPPING::NONVIDEO\t#{file.name}"
+          next
+        end
 
         status = client.file_conversion_status(file.id)
-        statuses = ["IN_QUEUE","CONVERTING","COMPLETED"]
-        next if !status.mp4 || statuses.include?(status.mp4["status"])
+        pending_statuses = ["IN_QUEUE", "CONVERTING"]
+        if status.mp4 && pending_statuses.include?(status.mp4["status"])
+          puts "PENDING::#{status.mp4['status']}\t#{file.name}"
+          next
+        end
 
-        puts "FOUND: Converting #{file.name}"
+        if status.mp4 && status.mp4["status"] == "COMPLETED"
+          puts "SKIPPING::COMPLETED\t#{file.name}"
+          next
+        end
+
+        puts "STARTING\t\t#{file.name}"
         client.file_convert(file.id)
       end
 
